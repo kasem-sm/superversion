@@ -175,15 +175,18 @@ class VersionCheckerAction : AnAction() {
                         val doc = docBuilder.parse(connection.inputStream)
 
                         val versionsNodeList = doc.getElementsByTagName("version")
+
                         val versions = (0 until versionsNodeList.length)
                             .map { versionsNodeList.item(it).textContent }
                             .filter { version ->
-                                // Filter stable version
-                                // TODO: In future, add a dialog to let user choose their preference or enable exception for certain dependency
-                                !version.contains("alpha", ignoreCase = true) &&
-                                        !version.contains("beta", ignoreCase = true) &&
-                                        !version.contains("rc", ignoreCase = true) &&
-                                        !version.contains("snapshot", ignoreCase = true)
+                                // Filter stable version unless the key contains any of the pre-release tags
+                                val userOptedForPreRelease = preReleaseTags.any { dependency.currentVersion.contains(it, ignoreCase = true) }
+
+                                if (userOptedForPreRelease) {
+                                    preReleaseTags.any { version.contains(it, ignoreCase = true) }
+                                } else {
+                                    preReleaseTags.none { version.contains(it, ignoreCase = true) }
+                                }
                             }
 
                         println("Filtered out stable version - $versions")
@@ -191,8 +194,8 @@ class VersionCheckerAction : AnAction() {
                         if (versions.isNotEmpty()) {
                             println("Found ${versions.size} valid versions: ${versions.joinToString()}")
                             return versions.maxWithOrNull { v1, v2 ->
-                                val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
-                                val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
+                                val parts1 = v1.split(".", "-", "alpha", "beta", "rc", "snapshot").map { it.toIntOrNull() ?: 0 }
+                                val parts2 = v2.split(".", "-", "alpha", "beta", "rc", "snapshot").map { it.toIntOrNull() ?: 0 }
                                 // TODO: Can we just get the last index instead of comparing? Anyway
                                 compareVersionParts(parts1, parts2)
                             }
@@ -278,8 +281,8 @@ class VersionCheckerAction : AnAction() {
     }
 
     private fun compareVersions(current: String, latest: String): Boolean {
-        val currentParts = current.split(".").map { it.toIntOrNull() ?: 0 }
-        val latestParts = latest.split(".").map { it.toIntOrNull() ?: 0 }
+        val currentParts = current.split(".", "-", "alpha", "beta", "rc", "snapshot").map { it.toIntOrNull() ?: 0 }
+        val latestParts = latest.split(".", "-", "alpha", "beta", "rc", "snapshot").map { it.toIntOrNull() ?: 0 }
 
         for (i in 0 until maxOf(currentParts.size, latestParts.size)) {
             val currentPart = currentParts.getOrNull(i) ?: 0
@@ -295,5 +298,6 @@ class VersionCheckerAction : AnAction() {
     companion object {
         private const val MAVEN_CENTRAL_BASE = "https://repo1.maven.org/maven2"
         private const val GOOGLE_MAVEN_BASE = "https://dl.google.com/dl/android/maven2"
+        private val preReleaseTags = listOf("alpha", "beta", "rc", "snapshot")
     }
 }
